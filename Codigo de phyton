@@ -1,0 +1,123 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# --- 1. Definición de Variables y Carga de Datos ---
+FILE_NAME = 'T2T_NCBI2.csv'
+OUTPUT_CSV = 'largos_cromosomicos_t2t.csv'
+OUTPUT_PNG = 'largos_cromosomicos_barras.png'
+
+print(f"Cargando archivo: {FILE_NAME}")
+
+# Intentamos cargar con el separador por defecto (coma)
+df = pd.read_csv(FILE_NAME, sep=',')
+
+# --- 2. Limpieza de Encabezados (Fix para el caracter '#" y comillas) ---
+# Limpiar el nombre de las columnas (quitando '#' y espacios)
+df.columns = df.columns.str.replace('#', '')
+df = df.rename(columns=lambda x: x.strip())
+
+# Corregir el problema de las comillas en el primer encabezado (columna del cromosoma)
+col_chrom = df.columns[0]
+col_end = 'chromEnd'
+
+print(f"Columna de Cromosoma identificada como: '{col_chrom}'")
+
+# --- 3. Preprocesamiento de Datos ---
+# Asegurar que la columna de fin sea numérica
+try:
+    df[col_end] = pd.to_numeric(df[col_end], errors='coerce')
+    # Eliminar filas donde el 'chromEnd' no pudo ser convertido a número
+    df.dropna(subset=[col_end], inplace=True)
+except Exception as e:
+    print(f"ERROR: No se pudo convertir '{col_end}' a numérico. Revise el formato de esa columna.")
+    exit() # Detener si no se puede realizar el cálculo
+
+# --- 4. Cálculo del Largo Cromosómico (Máxima Coordenada) ---
+# Agrupar por el identificador del cromosoma y encontrar el valor máximo de la posición final
+chromosome_lengths = df.groupby(col_chrom)[col_end].max().reset_index()
+chromosome_lengths.columns = ['Cromosoma', 'Largo (Pares de Bases)']
+
+# Ordenar los resultados (de mayor a menor longitud)
+chromosome_lengths = chromosome_lengths.sort_values(
+    'Largo (Pares de Bases)', ascending=False
+)
+
+print("\n--- Resultados de Largos Cromosómicos Calculados ---")
+print(chromosome_lengths)
+
+# --- 5. Guardar y Visualizar Resultados ---
+# Guardar los resultados en un archivo CSV
+chromosome_lengths.to_csv(OUTPUT_CSV, index=False)
+print(f"\nResultados guardados en: {OUTPUT_CSV}")
+
+# Generar Visualización
+plt.figure(figsize=(15, 6))
+
+# Limitar el gráfico a los 30 más largos para claridad (si hay muchos cromosomas)
+if len(chromosome_lengths) > 30:
+    plot_data = chromosome_lengths.head(30)
+    title = 'Top 30 Largos Cromosómicos (Máx. Coordenada)'
+else:
+    plot_data = chromosome_lengths
+    title = 'Largos Cromosómicos (Máx. Coordenada)'
+
+sns.barplot(
+    x='Cromosoma',
+    y='Largo (Pares de Bases)',
+    data=plot_data,
+    palette='viridis'
+)
+plt.title(title)
+plt.xlabel('Cromosoma')
+plt.ylabel('Largo (Pares de Bases)')
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.savefig(OUTPUT_PNG)
+print(f"Gráfico guardado en: {OUTPUT_PNG}")
+
+# Para descargar el archivo en Colab, puede usar:
+# from google.colab import files
+# files.download(OUTPUT_CSV)
+# files.download(OUTPUT_PNG)
+
+#HG38
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Cargar el archivo con los resultados del análisis
+csv_file = 'largos_cromosomicos_t2t.csv'
+chromosome_lengths = pd.read_csv(csv_file)
+
+# --- Configuración de la Visualización ---
+OUTPUT_PNG = 'largos_cromosomicos_un_color.png'
+COLOR = 'steelblue' # Definición del color único
+
+plt.figure(figsize=(15, 6))
+
+# Determinar qué datos plotear (Top 30 para mejor visualización)
+if len(chromosome_lengths) > 30:
+    plot_data = chromosome_lengths.head(30)
+    title = 'Top 30 Largos Cromosómicos (Máx. Coordenada)'
+else:
+    plot_data = chromosome_lengths
+    title = 'Largos Cromosómicos (Máx. Coordenada)'
+
+# Generar el gráfico de barras
+sns.barplot(
+    x='Cromosoma',
+    y='Largo (Pares de Bases)',
+    data=plot_data,
+    color=COLOR # Se usa 'color' para un color fijo
+)
+plt.title(title, fontsize=16)
+plt.xlabel('Cromosoma', fontsize=12)
+plt.ylabel('Largo (Pares de Bases)', fontsize=12)
+plt.xticks(rotation=45, ha='right')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.savefig(OUTPUT_PNG)
+print(f"Gráfico guardado en: {OUTPUT_PNG}")
+
+#Comparación de datos
