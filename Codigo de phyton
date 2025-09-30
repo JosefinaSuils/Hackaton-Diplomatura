@@ -1,123 +1,112 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
+import numpy as np
+from matplotlib.ticker import FuncFormatter
 
-# --- 1. Definición de Variables y Carga de Datos ---
-FILE_NAME = 'T2T_NCBI2.csv'
-OUTPUT_CSV = 'largos_cromosomicos_t2t.csv'
-OUTPUT_PNG = 'largos_cromosomicos_barras.png'
+# 1. Cargar los datos (asumiendo que los archivos CSV han sido subidos a Colab)
+# Los archivos CSV con las longitudes calculadas son 'hg38_chromosome_lengths.csv' y 't2t_chromosome_lengths.csv'
+df_hg38 = pd.read_csv("hg38_chromosome_lengths.csv").rename(columns={'Length': 'Hg38_Length'})
+df_t2t = pd.read_csv("t2t_chromosome_lengths.csv").rename(columns={'Length': 'T2T_Length'})
 
-print(f"Cargando archivo: {FILE_NAME}")
+# 2. Unir y Filtrar datos
+# Unir las longitudes por nombre de cromosoma
+comparison_df = pd.merge(df_hg38, df_t2t, on='chrom', how='inner')
 
-# Intentamos cargar con el separador por defecto (coma)
-df = pd.read_csv(FILE_NAME, sep=',')
+# Filtrar por cromosomas canónicos (1-22, X, Y)
+standard_chroms = [f'chr{i}' for i in range(1, 23)] + ['chrX', 'chrY']
+comparison_df_filtered = comparison_df[comparison_df['chrom'].isin(standard_chroms)].set_index('chrom')
 
-# --- 2. Limpieza de Encabezados (Fix para el caracter '#" y comillas) ---
-# Limpiar el nombre de las columnas (quitando '#' y espacios)
-df.columns = df.columns.str.replace('#', '')
-df = df.rename(columns=lambda x: x.strip())
+# Ordenar los cromosomas por longitud descendente de Hg38
+comparison_df_filtered = comparison_df_filtered.sort_values(by='Hg38_Length', ascending=False)
 
-# Corregir el problema de las comillas en el primer encabezado (columna del cromosoma)
-col_chrom = df.columns[0]
-col_end = 'chromEnd'
+# 3. Preparar datos para el gráfico
+chromosomes = comparison_df_filtered.index
+hg38_lengths = comparison_df_filtered['Hg38_Length']
+t2t_lengths = comparison_df_filtered['T2T_Length']
 
-print(f"Columna de Cromosoma identificada como: '{col_chrom}'")
+# 4. Configuración del gráfico de barras agrupadas
+x = np.arange(len(chromosomes)) # Posiciones para los cromosomas
+width = 0.35 # Ancho de las barras
 
-# --- 3. Preprocesamiento de Datos ---
-# Asegurar que la columna de fin sea numérica
-try:
-    df[col_end] = pd.to_numeric(df[col_end], errors='coerce')
-    # Eliminar filas donde el 'chromEnd' no pudo ser convertido a número
-    df.dropna(subset=[col_end], inplace=True)
-except Exception as e:
-    print(f"ERROR: No se pudo convertir '{col_end}' a numérico. Revise el formato de esa columna.")
-    exit() # Detener si no se puede realizar el cálculo
+plt.figure(figsize=(14, 7))
+ax = plt.gca() # Obtener los ejes actuales
+# Barras para Hg38
+rects1 = ax.bar(x - width/2, hg38_lengths, width, label='Hg38 (RefSeq)', color='skyblue')
+# Barras para T2T
+rects2 = ax.bar(x + width/2, t2t_lengths, width, label='T2T (NCBI)', color='coral')
 
-# --- 4. Cálculo del Largo Cromosómico (Máxima Coordenada) ---
-# Agrupar por el identificador del cromosoma y encontrar el valor máximo de la posición final
-chromosome_lengths = df.groupby(col_chrom)[col_end].max().reset_index()
-chromosome_lengths.columns = ['Cromosoma', 'Largo (Pares de Bases)']
+# 5. Etiquetas y formato
+ax.set_title('Comparación de la Longitud Estimada de Cromosomas (Hg38 vs. T2T)', fontsize=16)
+ax.set_ylabel('Longitud (Pares de Bases)', fontsize=12)
+ax.set_xlabel('Cromosoma', fontsize=12)
+ax.set_xticks(x)
+ax.set_xticklabels(chromosomes, rotation=45, ha='right')
+ax.legend(loc='upper right')
+ax.grid(axis='y', linestyle='--', alpha=0.7)
 
-# Ordenar los resultados (de mayor a menor longitud)
-chromosome_lengths = chromosome_lengths.sort_values(
-    'Largo (Pares de Bases)', ascending=False
-)
+# Formatear el eje Y para mostrar valores en millones (ej. 200M)
+def millions_formatter(x, pos):
+    return f'{x*1e-6:,.0f}M'
+ax.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
 
-print("\n--- Resultados de Largos Cromosómicos Calculados ---")
-print(chromosome_lengths)
-
-# --- 5. Guardar y Visualizar Resultados ---
-# Guardar los resultados en un archivo CSV
-chromosome_lengths.to_csv(OUTPUT_CSV, index=False)
-print(f"\nResultados guardados en: {OUTPUT_CSV}")
-
-# Generar Visualización
-plt.figure(figsize=(15, 6))
-
-# Limitar el gráfico a los 30 más largos para claridad (si hay muchos cromosomas)
-if len(chromosome_lengths) > 30:
-    plot_data = chromosome_lengths.head(30)
-    title = 'Top 30 Largos Cromosómicos (Máx. Coordenada)'
-else:
-    plot_data = chromosome_lengths
-    title = 'Largos Cromosómicos (Máx. Coordenada)'
-
-sns.barplot(
-    x='Cromosoma',
-    y='Largo (Pares de Bases)',
-    data=plot_data,
-    palette='viridis'
-)
-plt.title(title)
-plt.xlabel('Cromosoma')
-plt.ylabel('Largo (Pares de Bases)')
-plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
-plt.savefig(OUTPUT_PNG)
-print(f"Gráfico guardado en: {OUTPUT_PNG}")
+plt.show() # Usar show() en Colab para mostrar el gráfico
 
-# Para descargar el archivo en Colab, puede usar:
-# from google.colab import files
-# files.download(OUTPUT_CSV)
-# files.download(OUTPUT_PNG)
-
-#HG38
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
+import numpy as np
+from matplotlib.ticker import FuncFormatter
 
-# Cargar el archivo con los resultados del análisis
-csv_file = 'largos_cromosomicos_t2t.csv'
-chromosome_lengths = pd.read_csv(csv_file)
+# Suposición: Los archivos de datos originales ('Hg38(1).csv' y 'T2T_NCBI2.csv')
+# ya han sido cargados en el entorno de Colab.
 
-# --- Configuración de la Visualización ---
-OUTPUT_PNG = 'largos_cromosomicos_un_color.png'
-COLOR = 'steelblue' # Definición del color único
+# 1. Cargar datos
+df_hg38 = pd.read_csv("Hg38(1).csv")
+df_t2t = pd.read_csv("T2T_NCBI2.csv")
 
-plt.figure(figsize=(15, 6))
+# Limpieza de nombres de columna para T2T
+df_t2t.columns = df_t2t.columns.str.replace(r'[#"]', '', regex=True).str.strip()
 
-# Determinar qué datos plotear (Top 30 para mejor visualización)
-if len(chromosome_lengths) > 30:
-    plot_data = chromosome_lengths.head(30)
-    title = 'Top 30 Largos Cromosómicos (Máx. Coordenada)'
-else:
-    plot_data = chromosome_lengths
-    title = 'Largos Cromosómicos (Máx. Coordenada)'
+# 2. Calcular Desvío Estándar por Cromosoma
+# El DS mide la dispersión de las posiciones finales de las características anotadas.
+# Hg38: DS de 'txEnd'
+hg38_std = df_hg38.groupby('chrom')['txEnd'].std().rename('Hg38_StdDev')
+# T2T: DS de 'chromEnd'
+t2t_std = df_t2t.groupby('chrom')['chromEnd'].std().rename('T2T_StdDev')
 
-# Generar el gráfico de barras
-sns.barplot(
-    x='Cromosoma',
-    y='Largo (Pares de Bases)',
-    data=plot_data,
-    color=COLOR # Se usa 'color' para un color fijo
-)
-plt.title(title, fontsize=16)
-plt.xlabel('Cromosoma', fontsize=12)
-plt.ylabel('Largo (Pares de Bases)', fontsize=12)
-plt.xticks(rotation=45, ha='right')
-plt.grid(axis='y', linestyle='--', alpha=0.7)
+# 3. Unir, Filtrar y Ordenar
+std_comparison_df = pd.merge(hg38_std, t2t_std, on='chrom', how='inner').reset_index()
+standard_chroms = [f'chr{i}' for i in range(1, 23)] + ['chrX', 'chrY']
+std_comparison_df_filtered = std_comparison_df[std_comparison_df['chrom'].isin(standard_chroms)].set_index('chrom')
+std_comparison_df_filtered = std_comparison_df_filtered.sort_values(by='Hg38_StdDev', ascending=False)
+
+# 4. Configuración del gráfico de barras agrupadas
+chromosomes = std_comparison_df_filtered.index
+hg38_std_devs = std_comparison_df_filtered['Hg38_StdDev']
+t2t_std_devs = std_comparison_df_filtered['T2T_StdDev']
+
+x = np.arange(len(chromosomes))  # Posiciones para los cromosomas
+width = 0.35  # Ancho de las barras
+
+plt.figure(figsize=(14, 7))
+ax = plt.gca()
+rects1 = ax.bar(x - width/2, hg38_std_devs, width, label='Hg38 (txEnd StdDev)', color='darkblue')
+rects2 = ax.bar(x + width/2, t2t_std_devs, width, label='T2T (chromEnd StdDev)', color='darkred')
+
+# 5. Etiquetas y formato
+ax.set_title('Comparación del Desvío Estándar de la Posición Final de Características Genómicas', fontsize=15)
+ax.set_ylabel('Desvío Estándar (Pares de Bases)', fontsize=12)
+ax.set_xlabel('Cromosoma', fontsize=12)
+ax.set_xticks(x)
+ax.set_xticklabels(chromosomes, rotation=45, ha='right')
+ax.legend(loc='upper right')
+ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+# Formatear el eje Y para mostrar valores en millones
+def millions_formatter(x, pos):
+    return f'{x*1e-6:,.1f}M'
+ax.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
+
 plt.tight_layout()
-plt.savefig(OUTPUT_PNG)
-print(f"Gráfico guardado en: {OUTPUT_PNG}")
+plt.show()
 
-#Comparación de datos
